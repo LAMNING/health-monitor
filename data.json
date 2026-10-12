@@ -1,0 +1,61 @@
+{
+  "timestamp": "2026-10-12T17:17:10+08:00",
+  "displayTime": "17:17",
+  "displayDate": "2026年10月12日 星期一",
+  "isSleeping": false,
+  "watch": {
+    "name": "REDMI Watch 5",
+    "mac": "AA:BB:CC:DD:EE:FF",
+    "connected": true,
+    "battery": null,
+    "heartRate": {
+      "current": null,
+      "avg": 77,
+      "max": 114,
+      "min": 50,
+      "history": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+    },
+    "bloodOxygen": 95,
+    "steps": 8653,
+    "stepsGoal": 6000,
+    "calories": 582,
+    "sleep": {
+      "totalMinutes": 309,
+      "deepMinutes": 90,
+      "lightMinutes": 219,
+      "score": null,
+      "bedtime": null,
+      "wakeTime": null,
+      "segments": [],
+      "sleepHeartRate": null,
+      "sleepStress": null
+    }
+  },
+  "phone": {
+    "model": "Xiaomi 17",
+    "battery": 100,
+    "charging": true,
+    "chargeEta": null,
+    "wifi": {
+      "ssid": "Example-5G",
+      "band": "5GHz",
+      "signal": "-41dBm（满格）",
+      "speed": "1200Mbps"
+    },
+    "storage": {
+      "usedGB": 128,
+      "totalGB": 256,
+      "percent": 50.0
+    }
+  },
+  "earphone": {
+    "name": "REDMI Buds 8 Pro",
+    "connected": false
+  },
+  "music": {
+    "app": "示例音乐",
+    "title": "Demo Track",
+    "artist": "Demo Artist",
+    "playing": false
+  }
+}
