@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>个人睡眠监控大屏（MIMO大模型测试）</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;color:#d7e3f5;font-family:'Segoe UI','PingFang SC','Microsoft YaHei',Inter,sans-serif;min-height:100vh;overflow-x:hidden;
+  background-image:radial-gradient(1200px 600px at 20% -10%,rgba(0,212,255,.08),transparent 60%),radial-gradient(1000px 700px at 110% 110%,rgba(124,58,237,.10),transparent 60%),linear-gradient(180deg,#0a0a1a,#0d0d22)}
+.glass{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:18px;backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  box-shadow:0 0 40px rgba(0,212,255,.06) inset,0 10px 30px rgba(0,0,0,.35);padding:20px 22px;position:relative;overflow:hidden;transition:box-shadow .3s}
+.glass::before{content:"";position:absolute;inset:0;border-radius:18px;pointer-events:none;background:linear-gradient(135deg,rgba(255,255,255,.09),transparent 40%)}
+.glass.pulse{animation:pulsebox .55s ease}
+@keyframes pulsebox{0%{box-shadow:0 0 0 0 rgba(0,212,255,.55),0 0 40px rgba(0,212,255,.06) inset}70%{box-shadow:0 0 0 4px rgba(0,212,255,.35),0 0 60px rgba(0,212,255,.18) inset}100%{box-shadow:0 0 0 0 rgba(0,212,255,0),0 0 40px rgba(0,212,255,.06) inset}}
+.wrap{max-width:1840px;margin:0 auto;padding:0 24px}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:26px 0 18px;gap:16px;flex-wrap:wrap}
+.htitle{font-size:clamp(24px,2.3vw,38px);font-weight:700;letter-spacing:2px;color:#eaf6ff;background:linear-gradient(90deg,#00d4ff,#7c3aed,#00d4ff);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hsub{color:#7c8794;font-size:13px;margin-top:8px;letter-spacing:1px}
+.topright{text-align:right;font-size:13px;color:#9aa7b8;line-height:1.8}
+.refreshinfo{font-family:Consolas,monospace;font-size:14px;color:#eaf6ff;display:inline-flex;align-items:center;gap:8px}
+.refreshinfo i{width:8px;height:8px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;animation:blink 1.6s infinite}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid;margin-top:6px}
+.live.on{color:#10b981;border-color:rgba(16,185,129,.5);background:rgba(16,185,129,.12)}
+.live.off{color:#f59e0b;border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.12)}
+.live i{width:7px;height:7px;border-radius:50%}
+.live.on i{background:#10b981;box-shadow:0 0 8px #10b981}
+.live.off i{background:#f59e0b}
+.grid{display:grid;gap:20px;grid-template-columns:1.05fr .95fr}
+.left,.right{display:flex;flex-direction:column;gap:20px;min-width:0}
+@media(max-width:1180px){.grid{grid-template-columns:1fr}}
+.chead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;position:relative;z-index:2}
+.chead h3{font-size:15px;font-weight:600;color:#cfe6f8;letter-spacing:1px;display:flex;align-items:center;gap:8px}
+.chead h3 .dot{width:6px;height:6px;border-radius:50%;background:#00d4ff;box-shadow:0 0 8px #00d4ff;animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.tag{font-size:11px;color:#7c8794;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);padding:3px 10px;border-radius:20px;letter-spacing:.5px}
+.ac{color:#00d4ff}.pu{color:#7c3aed}.og{color:#f59e0b}.gr{color:#10b981}.rd{color:#ef4444}.gy{color:#7c8794}
+/* ===== Sleep card ===== */
+.sleepwrap{position:relative}
+.sleep-non,.sleep-on{display:block}
+.fade-swap{animation:fadeswap .5s ease}
+@keyframes fadeswap{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.sleepstat{display:flex;align-items:center;gap:26px;flex-wrap:wrap;position:relative;z-index:2}
+.sleepmain .num{font-size:44px;color:#7dd3fc;font-family:Consolas,monospace;text-shadow:0 0 24px rgba(125,211,252,.3)}
+.kpi{font-size:12px;color:#7c8794;line-height:1.5;margin-top:6px}
+.ratio{display:flex;flex-direction:column;gap:8px;font-size:12px;min-width:150px;flex:1}
+.ratio .r{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ratio .bar{height:12px;border-radius:8px;background:rgba(255,255,255,.06);overflow:hidden;flex:1;margin:0 6px}
+.ratio .bar i{display:block;height:100%}
+.scorebox{display:flex;flex-direction:column;align-items:center;gap:4px;margin-left:auto;position:relative;z-index:2}
+.chart{width:100%;height:170px;position:relative;z-index:1}
+.chart.small{height:96px}
+/* sleeping mode */
+.sleepbig{display:flex;align-items:baseline;gap:12px;position:relative;z-index:2}
+.sleepbig .num{font-size:64px;font-weight:700;color:#7dd3fc;font-family:Consolas,monospace;text-shadow:0 0 30px rgba(125,211,252,.35)}
+.sleepbig .lbl{font-size:16px;color:#a9c8f0}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 12px;border-radius:20px;border:1px solid}
+.badge.deep{color:#93c5fd;border-color:rgba(59,130,246,.5);background:rgba(59,130,246,.16)}
+.badge.light{color:#bfdbfe;border-color:rgba(74,144,217,.5);background:rgba(74,144,217,.16)}
+.badge i{width:7px;height:7px;border-radius:50%}
+.badge.deep i{background:#3b82f6;box-shadow:0 0 8px #3b82f6}
+.badge.light i{background:#4a90d9;box-shadow:0 0 8px #4a90d9}
+.dualcharts{display:grid;grid-template-columns:1fr 1fr;gap:16px;position:relative;z-index:1}
+@media(max-width:900px){.dualcharts{grid-template-columns:1fr}}
+.chart.dual{height:120px}
+.sleepfoot{font-size:13px;color:#a9b6c8;margin-top:10px;position:relative;z-index:2;display:flex;gap:18px;flex-wrap:wrap}
+.sleepfoot b{font-family:Consolas,monospace}
+/* ===== HR ===== */
+.hrcard{display:flex;flex-direction:column;gap:16px}
+.hrtop{display:flex;align-items:center;gap:26px;flex-wrap:wrap;position:relative;z-index:2}
+.hrval{display:flex;align-items:flex-end}
+.hrval .num{font-size:70px;font-weight:700;color:#ef4444;line-height:.9;font-family:Consolas,monospace;text-shadow:0 0 30px rgba(239,68,68,.45);animation:heartbeat 1.1s infinite;transform-origin:center}
+@keyframes heartbeat{0%,28%,70%,100%{transform:scale(1)}14%{transform:scale(1.12)}42%{transform:scale(1.05)}56%{transform:scale(1.14)}}
+.unit{font-size:13px;color:#7c8794;margin-left:6px}
+.hrstat{display:flex;gap:22px;margin-top:8px;flex-wrap:wrap;position:relative;z-index:2}
+.hrstat .s b{display:block;font-size:20px;color:#eaf6ff;font-family:Consolas,monospace}
+.hrstat .s span{font-size:11px;color:#7c8794}
+.hrstat .s.hi b{color:#ef4444}.hrstat .s.lo b{color:#38bdf8}.hrstat .s.avg b{color:#a5f3fc}
+.blinkdot{position:absolute;width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.7);animation:blink 1.2s infinite;top:14px;right:14px;z-index:2}
+@keyframes blink{0%{box-shadow:0 0 0 0 rgba(239,68,68,.7)}70%{box-shadow:0 0 0 12px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+/* ===== devices ===== */
+.phoneitem{display:flex;align-items:center;gap:14px;padding:10px 0;border-bottom:1px dashed rgba(255,255,255,.07);position:relative;z-index:2}
+.phoneitem:last-child{border-bottom:none}
+.picon{width:42px;height:42px;flex:none;border-radius:12px;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.22);display:flex;align-items:center;justify-content:center;color:#00d4ff;font-size:18px}
+.ptxt{flex:1;min-width:0}
+.ptxt .n{font-size:11px;color:#7c8794}
+.ptxt .v{font-size:14px;color:#eaf6ff;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ptxt .sub{font-size:11px;color:#7c8794;margin-top:3px}
+.pbar{height:7px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:7px}
+.pbar i{display:block;height:100%;border-radius:6px}
+.battery{display:inline-flex;align-items:center;gap:2px}
+.batt-body{width:34px;height:17px;border:1.5px solid #10b981;border-radius:4px;position:relative;display:inline-flex;align-items:center;padding:2px}
+.batt-body i{height:100%;border-radius:2px;background:#10b981}
+.batt-nub{width:2.5px;height:8px;background:#10b981;border-radius:2px}
+.batt-body.charging i{animation:charge 1.6s infinite}
+@keyframes charge{0%{width:15%}50%{width:100%}100%{width:100%}}
+.bolt{color:#fbbf24;font-weight:800;animation:blink 1s infinite}
+.media{display:flex;flex-direction:column;gap:16px;position:relative;z-index:2}
+.media .part{display:flex;align-items:center;gap:14px}
+.micon{width:44px;height:44px;flex:none;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#00d4ff);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 20px rgba(124,58,237,.35)}
+.mtxt{flex:1;min-width:0}
+.mtxt .t{font-size:16px;font-weight:700;color:#eaf6ff;line-height:1.35;display:block}
+.mtxt .s{font-size:12px;color:#a9b6c8;margin-top:2px;display:block}
+.eq{display:flex;align-items:flex-end;gap:3px;height:20px;margin-left:auto}
+.eq i{width:4px;border-radius:3px;background:linear-gradient(#00d4ff,#7c3aed);animation:eqw 1s infinite}
+.eq i:nth-child(2){animation-delay:.15s}.eq i:nth-child(3){animation-delay:.35s}.eq i:nth-child(4){animation-delay:.5s}
+.eq.stopped i{animation:none;height:4px}
+@keyframes eqw{0%,100%{height:5px}50%{height:20px}}
+.connlight{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#10b981}
+.connlight i{width:9px;height:9px;border-radius:50%;background:#10b981;box-shadow:0 0 10px #10b981;animation:blink 1.6s infinite}
+.connlight.null{color:#7c8794}
+.connlight.null i{background:#5b6b7e;box-shadow:none;animation:none}
+.watchinfo{display:flex;flex-direction:column;gap:12px;font-size:13px;position:relative;z-index:2}
+.watchinfo .r{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.watchinfo .k{color:#7c8794}
+.watchrow{display:flex;align-items:center;gap:26px;flex-wrap:wrap;position:relative;z-index:2}
+.watchrow .item{flex:1;min-width:130px}
+.batt-dash{width:34px;height:17px;border:1.5px dashed #5b6b7e;border-radius:4px;position:relative;display:inline-flex;align-items:center;padding:2px;opacity:.7}
+.batt-dash i{height:100%;width:40%;border-radius:2px;background:repeating-linear-gradient(45deg,#5b6b7e 0 3px,transparent 3px 6px)}
+.mac{font-family:Consolas,monospace;color:#00d4ff;font-size:12px}
+.fadein{animation:fadein .9s ease both}
+.fadein.d1{animation-delay:.1s}.fadein.d2{animation-delay:.2s}.fadein.d3{animation-delay:.3s}.fadein.d4{animation-delay:.4s}
+@keyframes fadein{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap fadein">
+  <header class="topbar">
+    <div><h1 class="htitle">个人睡眠监控大屏（MIMO大模型测试）</h1>
+      <div class="hsub" id="subTitle">2026年10月12日 星期日 · 数据更新于 --:--</div></div>
+    <div class="topright">
+      <div class="refreshinfo"><i></i><span>上次刷新 <span id="lastRefresh">--:--:--</span> · <span id="countdown" style="color:#00d4ff">下次刷新 --:--</span></span></div>
+      <div id="liveTag" class="live off"><i></i><span>连接中…</span></div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="left">
+      <!-- Sleep card -->
+      <div class="glass fadein d1" id="cSleep">
+        <div class="chead"><h3><span class="dot" style="background:#7dd3fc;box-shadow:0 0 8px #7dd3fc"></span>睡眠分析</h3><span class="tag" id="sleepTag">--</span></div>
+        <div class="sleepwrap">
+          <!-- non-sleeping -->
+          <div id="sleepNon">
+            <div class="sleepstat">
+              <div class="sleepmain"><span class="num" id="sleepTotal">--</span><div class="kpi">昨晚总睡眠</div></div>
+              <div class="kpi" style="margin-top:8px"><span id="sleepBed">--</span><br><span class="gy" style="font-size:11px">入睡–醒来</span></div>
+              <div class="ratio">
+                <div class="r"><span class="gy">深睡</span><span class="bar"><i id="deepBar" style="width:0%;background:#1e3a5f"></i></span><b style="color:#93c5fd" id="deepTxt">--</b></div>
+                <div class="r"><span class="gy">浅睡</span><span class="bar"><i id="lightBar" style="width:0%;background:#4a90d9"></i></span><b style="color:#bfdbfe" id="lightTxt">--</b></div>
+              </div>
+              <div class="scorebox" id="scoreRing" style="width:110px;height:110px"></div>
+            </div>
+            <div class="chart small" id="sleepChart"></div>
+            <div style="font-size:11px;color:#5b6b7e;margin-top:4px;position:relative;z-index:2">
+              <span style="color:#1e3a5f">■ 深睡</span>&nbsp;&nbsp;<span style="color:#4a90d9">■ 浅睡</span></div>
+          </div>
+          <!-- sleeping -->
+          <div id="sleepOn" style="display:none">
+            <div class="chead" style="margin-bottom:10px">
+              <span id="sleepStateBadge" class="badge deep"><i></i>深睡</span>
+            </div>
+            <div class="sleepbig"><span class="num" id="sleepElapsed">--:--:--</span><span class="lbl">已睡</span></div>
+            <div class="dualcharts">
+              <div><div style="font-size:12px;color:#7c8794;margin-bottom:4px">心率 <span class="rd">曲线</span></div><div class="chart dual" id="sleepHrChart"></div></div>
+              <div><div style="font-size:12px;color:#7c8794;margin-bottom:4px">压力 <span class="pu">曲线</span></div><div class="chart dual" id="sleepStressChart"></div></div>
+            </div>
+            <div class="sleepfoot"><span>当前心率 <b class="rd" id="curHr">--</b> bpm</span><span>压力 <b class="pu" id="curStress">--</b></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HR card -->
+      <div class="glass fadein d2" id="cHR"><div class="blinkdot"></div>
+        <div class="chead"><h3><span class="dot"></span>实时心率</h3><span class="tag" id="hrTag">--</span></div>
+        <div class="hrcard">
+          <div class="hrtop">
+            <div class="hrval"><span class="num" id="hrNow">--</span><span class="unit">bpm</span></div>
+          </div>
+          <div class="hrstat">
+            <div class="s hi"><b id="hrMax">--</b><span>今日最高</span></div>
+            <div class="s lo"><b id="hrMin">--</b><span>今日最低</span></div>
+            <div class="s avg"><b id="hrAvg">--</b><span>今日平均</span></div>
+          </div>
+          <div class="chart" id="hrChart"></div>
+          <div style="font-size:11px;color:#5b6b7e;margin-top:4px;position:relative;z-index:2">
+            <span class="rd">■ &lt;60 低</span>&nbsp;<span class="gr">■ 60–100 正常</span>&nbsp;<span class="og">■ 100–140 运动</span>&nbsp;<span class="rd">■ &gt;140 高</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right">
+      <!-- Phone -->
+      <div class="glass fadein d2" id="cPhone">
+        <div class="chead"><h3><span class="dot"></span>手机状态</h3><span class="tag" id="phoneTag">--</span></div>
+        <div class="phoneitem"><div class="picon">📱</div>
+          <div class="ptxt"><span class="n">设备</span><span class="v" id="phoneModel">--</span></div></div>
+        <div class="phoneitem"><div class="picon">⚡</div>
+          <div class="ptxt"><span class="n">电量</span>
+            <div class="v"><span class="battery" id="battIcon"><span class="batt-body"><i></i></span><span class="batt-nub"></span></span>
+              <span id="battPct">--</span><span class="bolt" id="battCharge"></span></div>
+            <div class="sub" id="battEta"></div></div></div>
+        <div class="phoneitem"><div class="picon">📶</div>
+          <div class="ptxt"><span class="n">网络</span>
+            <div class="v" id="wifiV">--</div></div></div>
+        <div class="phoneitem"><div class="picon">💾</div>
+          <div class="ptxt"><span class="n">存储</span>
+            <div class="v" id="storeV">--</div>
+            <div class="pbar"><i id="storeBar" style="width:0%"></i></div></div></div>
+      </div>
+
+      <!-- Music + Buds merged -->
+      <div class="glass fadein d3" id="cMedia">
+        <div class="chead"><h3><span class="dot" style="background:#7c3aed;box-shadow:0 0 8px #7c3aed"></span>正在播放 + 耳机</h3></div>
+        <div class="media">
+          <div class="part">
+            <div class="micon">🎵</div>
+            <div class="mtxt"><span class="t" id="musicTitle">--</span><span class="s" id="musicArtist">--</span></div>
+            <div class="eq" id="eq"><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="part">
+            <div class="micon" style="background:linear-gradient(135deg,#00d4ff,#7c3aed)">🎧</div>
+            <div class="mtxt"><span class="t" id="budsName">--</span><span class="s" id="budsApp">--</span></div>
+            <div id="budsConn" class="connlight null"><i></i>--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Watch -->
+      <div class="glass fadein d4" id="cWatch">
+        <div class="chead"><h3><span class="dot"></span>手表状态</h3><span class="tag" id="watchTag">--</span></div>
+        <div class="watchinfo">
+          <div class="r"><span class="k">设备</span><span class="v" style="font-weight:600" id="watchName">--</span> <span class="mac" id="watchMac">--</span></div>
+          <div class="r"><span class="k">连接状态</span><span class="connlight null" id="watchConn"><i></i>--</span></div>
+        </div>
+        <div class="watchrow" style="margin-top:10px">
+          <div class="item"><span class="n" style="font-size:11px;color:#7c8794">电量</span><div style="margin-top:6px" id="watchBatt"><span class="batt-dash"><i></i></span> <span class="gy">获取中…</span></div></div>
+          <div class="item" id="oxItem"><span class="n" style="font-size:11px;color:#7c8794">血氧</span><div style="margin-top:6px" id="oxGauge"></div></div>
+          <div class="item"><span class="n" style="font-size:11px;color:#7c8794">步数</span><div style="margin-top:6px" id="stepRing" style="width:96px;height:96px"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://registry.npmmirror.com/echarts/5.6.0/files/dist/echarts.min.js"></script>
+<script>
+var DEFAULT={
+  "timestamp":"2026-10-12T15:05:24","displayTime":"15:05","displayDate":"2026年10月12日 星期日","isSleeping":false,
+  "watch":{"name":"REDMI Watch 5","mac":"AA:BB:CC:DD:EE:FF","connected":true,"battery":null,
+    "heartRate":{"current":72,"avg":72,"max":104,"min":50,"history":[52,55,58,54,50,53,56,60,65,68,72,75,78,80,82,85,90,95,104,98,92,85,78,72]},
+    "bloodOxygen":95,"steps":8169,"stepsGoal":6000,"calories":544,
+    "sleep":{"totalMinutes":309,"deepMinutes":90,"lightMinutes":219,"score":78,"bedtime":"01:02","wakeTime":"06:45",
+      "segments":[{"start":"01:02","end":"01:31","type":"deep"},{"start":"01:31","end":"01:44","type":"light"},{"start":"01:44","end":"02:56","type":"deep"},{"start":"02:56","end":"03:12","type":"light"},{"start":"03:12","end":"03:32","type":"deep"},{"start":"03:32","end":"03:46","type":"light"},{"start":"03:46","end":"04:15","type":"deep"},{"start":"04:15","end":"04:26","type":"light"},{"start":"04:26","end":"04:55","type":"deep"},{"start":"04:55","end":"05:10","type":"light"},{"start":"05:10","end":"05:46","type":"deep"},{"start":"05:46","end":"06:05","type":"light"},{"start":"06:05","end":"06:45","type":"deep"}],
+      "sleepHeartRate":[50,48,47,49,52,55,58,62,65,68,72,75,78,80,82,81,79,76,72,70,68,66,64,62],
+      "sleepStress":[22,20,19,21,23,26,30,34,38,41,45,48,50,48,45,42,38,35,32,28,26,24,22,20]}},
+  "phone":{"model":"Xiaomi 17","battery":52,"charging":true,"chargeEta":"45分钟",
+    "wifi":{"ssid":"Example-5G","band":"5GHz","signal":"4/4","speed":"1200Mbps"},
+    "storage":{"usedGB":128,"totalGB":256,"percent":50.0}},
+  "earphone":{"name":"REDMI Buds 8 Pro","connected":null},
+  "music":{"app":"示例音乐","title":"Demo Track","artist":"Demo Artist","playing":true}
+};
+var lastData=null,isSleeping=false,sleepStartTime=null;
+
+/* helpers */
+function min2h(m){var h=Math.floor(m/60),mm=m%60;return h+'h '+((mm<10?'0':'')+mm)+'m';}
+function t2m(t){var a=t.split(':');return parseInt(a[0])*60+parseInt(a[1]);}
+function ring(el,pct,color,v,l,size,sw){var c=size/2,r=(size-sw)/2,circ=2*Math.PI*r,p=Math.max(0,Math.min(100,pct));
+  var dash=circ*p/100;
+  el.innerHTML='<svg width="'+size+'" height="'+size+'">'+
+  '<g transform="rotate(-90 '+c+' '+c+')">'+
+  '<circle cx="'+c+'" cy="'+c+'" r="'+r+'" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="'+sw+'"/>'+
+  '<circle cx="'+c+'" cy="'+c+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+(circ-dash).toFixed(1)+'"/>'+
+  '</g>'+
+  '<text x="50%" y="'+(c-3)+'" text-anchor="middle" dominant-baseline="central" fill="#eaf6ff" font-family="Consolas,monospace" font-size="'+(size*0.19)+'" font-weight="700">'+v+'</text>'+
+  '<text x="50%" y="'+(c+size*0.14)+'" text-anchor="middle" fill="#7c8794" font-size="'+(size*0.09)+'">'+l+'</text></svg>';}
+function gaugeSmall(el,pct,color,val){
+  var c=24,r=20;function pt(a){a*=Math.PI/180;return [c+r*Math.cos(a),c+r*Math.sin(a)];}
+  var bg='M'+pt(135)[0]+','+pt(135)[1];for(var i=1;i<=270;i++)bg+='L'+pt(135+i)[0].toFixed(1)+','+pt(135+i)[1].toFixed(1);
+  var fg='M'+pt(135)[0]+','+pt(135)[1];var end=pct/100*270;for(i=1;i<=end;i++)fg+='L'+pt(135+i)[0].toFixed(1)+','+pt(135+i)[1].toFixed(1);
+  el.innerHTML='<svg width="48" height="48">'+
+  '<path d="'+bg+'" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="5" stroke-linecap="round"/>'+
+  '<path d="'+fg+'" fill="none" stroke="'+color+'" stroke-width="5" stroke-linecap="round" style="filter:drop-shadow(0 0 4px '+color+')"/>'+
+  '<text x="24" y="28" text-anchor="middle" fill="'+color+'" font-family="Consolas,monospace" font-size="14" font-weight="700" style="writing-mode:horizontal-tb">'+val+'%</text></svg>';}
+
+/* ECharts instances */
+var hrChart,sleepChart,hrSleepChart,stressChart;
+function initCharts(){
+  hrChart=echarts.init(document.getElementById('hrChart'));
+  hrChart.setOption({backgroundColor:'transparent',
+    grid:{left:8,right:14,top:24,bottom:8,containLabel:true},
+    tooltip:{trigger:'axis',backgroundColor:'rgba(10,10,26,.92)',borderColor:'rgba(0,212,255,.3)',textStyle:{color:'#d7e3f5',fontSize:11},formatter:function(ps){var p=ps[0];return '<b>'+p.axisValue+'</b>　'+p.value+' bpm';}},
+    xAxis:{type:'category',data:[],axisLine:{lineStyle:{color:'rgba(255,255,255,.1)'}},axisLabel:{color:'#5b6b7e',fontSize:10,hideOverlap:true},axisTick:{show:false}},
+    yAxis:{type:'value',min:40,max:150,splitNumber:4,axisLabel:{color:'#5b6b7e',fontSize:10},splitLine:{lineStyle:{color:'rgba(255,255,255,.05)'}}},
+    series:[{name:'心率',type:'line',smooth:true,symbol:'circle',symbolSize:5,data:[],
+      lineStyle:{width:2.4,color:'#00d4ff',shadowColor:'rgba(0,212,255,.5)',shadowBlur:8},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(0,212,255,.35)'},{offset:1,color:'rgba(0,212,255,0)'}])}}]});
+
+  sleepChart=echarts.init(document.getElementById('sleepChart'));
+  sleepChart.setOption({backgroundColor:'transparent',
+    grid:{left:8,right:8,top:8,bottom:0,containLabel:true},
+    xAxis:{type:'value',min:60,max:420,interval:60,axisLabel:{formatter:function(v){var h=Math.floor(v/60);return (h<10?'0':'')+h+':00';},color:'#5b6b7e',fontSize:10},axisLine:{lineStyle:{color:'rgba(255,255,255,.1)'}},axisTick:{show:false}},
+    yAxis:{show:false,min:0,max:1},
+    tooltip:{trigger:'item',backgroundColor:'rgba(10,10,26,.92)',borderColor:'rgba(0,212,255,.3)',textStyle:{color:'#d7e3f5',fontSize:11},formatter:function(p){function f(m){var h=Math.floor(m/60);return (h<10?'0':'')+h+':'+((m%60<10?'0':'')+(m%60));}return '<b>'+p.data.t+'</b><br/>'+f(p.data.s)+' – '+f(p.data.e)+'　'+(p.data.e-p.data.s)+' 分钟';}},
+    series:[{type:'custom',encode:{x:[0],y:[1]},renderItem:function(params,api){
+      var st=api.value(0),en=api.value(1),y0=api.coord([0,0.3]),y1=api.coord([0,0.98]);
+      var x0=api.coord([st,0]),x1=api.coord([en,0]);var bw=Math.max(x1[0]-x0[0],1);
+      return {type:'rect',shape:{x:x0[0],y:y0[1],width:bw,height:y1[1]-y0[1]},style:{fill:api.value(2),stroke:'rgba(10,10,26,.4)',lineWidth:1}};},data:[]}]});
+
+  hrSleepChart=echarts.init(document.getElementById('sleepHrChart'));
+  hrSleepChart.setOption({backgroundColor:'transparent',
+    grid:{left:8,right:10,top:12,bottom:4,containLabel:true},
+    tooltip:{trigger:'axis',backgroundColor:'rgba(10,10,26,.92)',borderColor:'rgba(239,68,68,.4)',textStyle:{color:'#d7e3f5',fontSize:11}},
+    xAxis:{type:'category',axisLine:{lineStyle:{color:'rgba(255,255,255,.1)'}},axisLabel:{color:'#5b6b7e',fontSize:9,hideOverlap:true},axisTick:{show:false}},
+    yAxis:{type:'value',axisLabel:{color:'#5b6b7e',fontSize:9},splitLine:{lineStyle:{color:'rgba(255,255,255,.05)'}}},
+    series:[{name:'心率',type:'line',smooth:true,symbol:'none',data:[],
+      lineStyle:{width:2,color:'#ef4444',shadowColor:'rgba(239,68,68,.5)',shadowBlur:6},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(239,68,68,.35)'},{offset:1,color:'rgba(239,68,68,0)'}])}}]});
+
+  stressChart=echarts.init(document.getElementById('sleepStressChart'));
+  stressChart.setOption({backgroundColor:'transparent',
+    grid:{left:8,right:10,top:12,bottom:4,containLabel:true},
+    tooltip:{trigger:'axis',backgroundColor:'rgba(10,10,26,.92)',borderColor:'rgba(124,58,237,.4)',textStyle:{color:'#d7e3f5',fontSize:11}},
+    xAxis:{type:'category',axisLine:{lineStyle:{color:'rgba(255,255,255,.1)'}},axisLabel:{color:'#5b6b7e',fontSize:9,hideOverlap:true},axisTick:{show:false}},
+    yAxis:{type:'value',axisLabel:{color:'#5b6b7e',fontSize:9},splitLine:{lineStyle:{color:'rgba(255,255,255,.05)'}}},
+    series:[{name:'压力',type:'line',smooth:true,symbol:'none',data:[],
+      lineStyle:{width:2,color:'#7c3aed',shadowColor:'rgba(124,58,237,.5)',shadowBlur:6},
+      areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(124,58,237,.35)'},{offset:1,color:'rgba(124,58,237,0)'}])}}]});
+  window.addEventListener('resize',function(){hrChart.resize();sleepChart.resize();hrSleepChart.resize();stressChart.resize();});
+}
+
+/* ===== update ===== */
+function updateAll(d){
+  lastData=d;
+  document.getElementById('subTitle').textContent=d.displayDate+' · 数据更新于 '+d.displayTime;
+  var now=new Date();
+  var hh=now.getHours(),mm=now.getMinutes(),ss=now.getSeconds();
+  document.getElementById('lastRefresh').textContent=(hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm+':'+(ss<10?'0':'')+ss;
+
+  /* Sleep */
+  var sl=d.watch.sleep;
+  document.getElementById('sleepTag').textContent='昨晚 '+sl.bedtime+'–'+sl.wakeTime;
+  isSleeping=!!d.isSleeping;
+  if(isSleeping){
+    // start elapsed timer
+    sleepStartTime=t2m(sl.bedtime)*60; // seconds from midnight
+    showSleepOn(sl);
+  }else{
+    showSleepNon(sl);
+  }
+
+  /* HR — 只显示到当前小时，未来时段留空 */
+  var hr=d.watch.heartRate;
+  document.getElementById('hrNow').textContent=hr.current||'--';
+  document.getElementById('hrMax').textContent=hr.max||'--';
+  document.getElementById('hrMin').textContent=hr.min||'--';
+  document.getElementById('hrAvg').textContent=hr.avg||'--';
+  document.getElementById('hrTag').textContent=d.watch.name;
+  var curH=new Date().getHours();
+  var x=[],md=[];
+  for(var i=0;i<24;i++)x.push((i<10?'0':'')+i+':00');
+  (hr.history||[]).forEach(function(v,i){
+    if(i>curH||v==null)return; // 超过当前小时或null不显示
+    var c=v<60?'#38bdf8':(v<=100?'#10b981':(v<=140?'#f59e0b':'#ef4444'));
+    md.push({coord:[x[i],v],value:v,itemStyle:{color:c}});});
+  if(md.length===0){
+    hrChart.setOption({xAxis:{data:x},series:[{data:[]}],title:{text:'暂无逐时心率数据',left:'center',top:'middle',textStyle:{color:'#5b6b7e',fontSize:13,fontWeight:'normal'}}});
+  }else{
+    hrChart.setOption({xAxis:{data:x},series:[{data:md}],title:{show:false}});
+  }
+
+  /* Phone */
+  var ph=d.phone;
+  document.getElementById('phoneTag').textContent=ph.model;
+  document.getElementById('phoneModel').textContent=ph.model;
+  var bp=ph.battery||0,bc=ph.charging;
+  var bcolor=bp<20?'#ef4444':(bp<50?'#f59e0b':'#10b981');
+  document.getElementById('battIcon').innerHTML='<span class="batt-body'+(bc?' charging':'')+'" style="border-color:'+bcolor+'"><i style="background:'+bcolor+'"></i></span><span class="batt-nub" style="background:'+bcolor+'"></span>';
+  document.getElementById('battPct').textContent=(bp!=null?bp+'%':'--');
+  document.getElementById('battCharge').textContent=bc?'⚡ 充电中':'';
+  document.getElementById('battEta').textContent=bc&&ph.chargeEta?('预计 '+ph.chargeEta+' 充满'):'';
+  var w=ph.wifi||{};
+  document.getElementById('wifiV').innerHTML='WiFi <span class="gy">· '+w.ssid+'</span> <span class="ac">'+w.band+'</span> <span class="gy">· 信号</span> <span class="gr">'+(w.signal||'--')+'</span> <span class="gy">· '+w.speed+'</span>';
+  var s=ph.storage||{};var sp=s.percent||0;
+  document.getElementById('storeV').innerHTML=s.usedGB+' / '+s.totalGB+' GB <span class="gy">已用 '+sp+'%</span>';
+  var scolor=sp>90?'#ef4444':(sp>80?'#f59e0b':'#10b981');
+  var barEl=document.getElementById('storeBar');barEl.style.width=Math.min(100,sp)+'%';
+  barEl.style.background='linear-gradient(90deg,#f59e0b,'+scolor+')';barEl.style.boxShadow='0 0 10px '+scolor;
+
+  /* Music + Buds */
+  var mu=d.music;
+  document.getElementById('musicTitle').textContent=mu.title||'--';
+  document.getElementById('musicArtist').textContent=mu.artist||'--';
+  document.getElementById('eq').className='eq'+(mu.playing?'':' stopped');
+  var ep=d.earphone||{};
+  document.getElementById('budsName').textContent=ep.name||'--';
+  document.getElementById('budsApp').textContent=mu.app||'--';
+  var bcEl=document.getElementById('budsConn');
+  if(ep.connected===true){bcEl.className='connlight';bcEl.innerHTML='<i></i>已连接';}
+  else if(ep.connected===false){bcEl.className='connlight null';bcEl.innerHTML='<i></i>未连接';}
+  else{bcEl.className='connlight null';bcEl.innerHTML='<i></i>—';}
+
+  /* Watch */
+  var wt=d.watch;
+  document.getElementById('watchTag').textContent=wt.name||'--';
+  document.getElementById('watchName').textContent=wt.name||'--';
+  document.getElementById('watchMac').textContent=wt.mac?('MAC '+wt.mac.slice(-6)):'--';
+  var wc=document.getElementById('watchConn');
+  if(wt.connected===true){wc.className='connlight';wc.innerHTML='<i></i>已连接';}
+  else if(wt.connected===false){wc.className='connlight null';wc.innerHTML='<i></i>未连接';}
+  else{wc.className='connlight null';wc.innerHTML='<i></i>—';}
+  if(wt.battery!=null){document.getElementById('watchBatt').innerHTML=wt.battery+'%';}
+  else{document.getElementById('watchBatt').innerHTML='<span class="batt-dash"><i></i></span> <span class="gy">获取中…</span>';}
+  gaugeSmall(document.getElementById('oxGauge'),(wt.bloodOxygen||95)/100*100,wt.bloodOxygen>=95?'#10b981':'#f59e0b',wt.bloodOxygen||'--');
+  var st2=wt.steps||0,goal=wt.stepsGoal||6000;
+  ring(document.getElementById('stepRing'),Math.min(100,st2/goal*100),'#10b981',st2+'','步数',96,8);
+
+  pulseCards();
+}
+function showSleepNon(sl){
+  document.getElementById('sleepNon').style.display='block';
+  document.getElementById('sleepOn').style.display='none';
+  var el=document.getElementById('sleepNon');el.classList.remove('fade-swap');void el.offsetWidth;el.classList.add('fade-swap');
+  document.getElementById('sleepTotal').textContent=min2h(sl.totalMinutes||0);
+  document.getElementById('sleepBed').textContent=sl.bedtime+' → '+sl.wakeTime;
+  var dp=sl.deepMinutes||0,lt=sl.lightMinutes||0,tot=dp+lt;
+  document.getElementById('deepBar').style.width=(tot?dp/tot*100:0)+'%';
+  document.getElementById('lightBar').style.width=(tot?lt/tot*100:0)+'%';
+  document.getElementById('deepTxt').textContent=min2h(dp);
+  document.getElementById('lightTxt').textContent=min2h(lt);
+  ring(document.getElementById('scoreRing'),sl.score||0,'#4ade80',sl.score||'--','评分',110,9);
+  var segs=(sl.segments||[]).map(function(s){var c=s.type==='deep'?'#1e3a5f':'#4a90d9';
+    return {value:[t2m(s.start),t2m(s.end)],s:t2m(s.start),e:t2m(s.end),t:(s.type==='deep'?'深睡':'浅睡'),c:c};});
+  sleepChart.setOption({series:[{data:segs}]});
+}
+function showSleepOn(sl){
+  document.getElementById('sleepNon').style.display='none';
+  document.getElementById('sleepOn').style.display='block';
+  var el=document.getElementById('sleepOn');el.classList.remove('fade-swap');void el.offsetWidth;el.classList.add('fade-swap');
+  // badge: current sleep phase = last segment type before now
+  var nowMin=new Date().getHours()*60+new Date().getMinutes();
+  var segs=sl.segments||[];var cur='deep';
+  segs.forEach(function(s){var st=t2m(s.start),en=t2m(s.end);if(nowMin>=st&&nowMin<en)cur=s.type;});
+  var bEl=document.getElementById('sleepStateBadge');
+  if(cur==='deep'){bEl.className='badge deep';bEl.innerHTML='<i></i>深睡';}
+  else{bEl.className='badge light';bEl.innerHTML='<i></i>浅睡';}
+  // elapsed timer
+  updateSleepElapsed();
+  // dual charts
+  var sx=[];for(var i=0;i<24;i++)sx.push(i);
+  hrSleepChart.setOption({xAxis:{data:sx},series:[{data:sl.sleepHeartRate||[]}]});
+  stressChart.setOption({xAxis:{data:sx},series:[{data:sl.sleepStress||[]}]});
+  document.getElementById('curHr').textContent=(lastData.watch.heartRate.current||'--');
+  var sr=sl.sleepStress||[];document.getElementById('curStress').textContent=sr.length?sr[sr.length-1]:'--';
+}
+function updateSleepElapsed(){
+  if(!isSleeping||!sleepStartTime)return;
+  var now=new Date();
+  var secs=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
+  var e=secs-sleepStartTime;if(e<0)e+=86400;
+  var hh=Math.floor(e/3600),mm=Math.floor((e%3600)/60),ss=e%60;
+  var p=function(n){return (n<10?'0':'')+n;};
+  document.getElementById('sleepElapsed').textContent=p(hh)+':'+p(mm)+':'+p(ss);
+}
+setInterval(updateSleepElapsed,1000);
+
+function pulseCards(){
+  ['cSleep','cHR','cPhone','cMedia','cWatch'].forEach(function(id){
+    var el=document.getElementById(id);el.classList.remove('pulse');void el.offsetWidth;el.classList.add('pulse');});
+}
+
+/* ===== fetch ===== */
+var liveTag=document.getElementById('liveTag');
+function setLive(on){liveTag.className='live '+(on?'on':'off');
+  liveTag.innerHTML=on?'<i></i><span>✓ 实时</span>':'<i></i><span>⚠ 离线数据</span>';}
+/* ===== 智能合并：新数据为null的字段保留旧值 ===== */
+function mergeDeep(oldD,newD){
+  if(!oldD)return newD;
+  if(newD==null)return oldD;
+  if(typeof newD!=='object'||typeof oldD!=='object')return newD!=null?newD:oldD;
+  var out={};
+  var keys={};for(var k in oldD)keys[k]=1;for(var k in newD)keys[k]=1;
+  for(var k in keys){
+    var nv=newD[k],ov=oldD[k];
+    if(Array.isArray(nv)){
+      // 数组：如果新数组全null或为空且旧数组有数据，保留旧的
+      var hasReal=nv.some(function(x){return x!=null});
+      if(!hasReal&&ov&&Array.isArray(ov)&&ov.some(function(x){return x!=null}))out[k]=ov;
+      else out[k]=nv;
+    }else if(nv!=null&&typeof nv==='object'){
+      out[k]=mergeDeep(ov,nv);
+    }else{
+      out[k]=nv!=null?nv:ov;
+    }
+  }
+  return out;
+}
+
+function fetchData(){
+  var ctrl=typeof AbortController!=='undefined'?new AbortController():null;
+  var timer=ctrl?setTimeout(function(){ctrl.abort();},5000):null;
+  var opts={method:'GET',mode:'cors',cache:'no-cache'};
+  if(ctrl)opts.signal=ctrl.signal;
+  fetch('http://localhost:8765/data.json?_='+Date.now(),opts).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);return r.json();
+  }).then(function(d){
+    if(timer)clearTimeout(timer);
+    d=mergeDeep(lastData,d);
+    updateAll(d);setLive(true);
+  }).catch(function(){
+    if(timer)clearTimeout(timer);setLive(false);
+    if(lastData)updateAll(lastData);
+  });
+}
+
+/* 自动刷新：2分钟一次 + 倒计时显示 */
+var refreshInterval=120000; // 2分钟
+var nextRefreshTime=Date.now()+refreshInterval;
+function tickCountdown(){
+  var el=document.getElementById('countdown');
+  if(!el)return;
+  var left=Math.max(0,Math.round((nextRefreshTime-Date.now())/1000));
+  var m=Math.floor(left/60),s=left%60;
+  el.textContent='下次刷新 '+(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+}
+function doFetch(){
+  nextRefreshTime=Date.now()+refreshInterval;
+  fetchData();
+}
+setInterval(tickCountdown,1000);
+setInterval(doFetch,refreshInterval);
+tickCountdown();
+
+initCharts();
+updateAll(DEFAULT);
+setLive(false);
+doFetch();
+
+/* ===== 热更新：每30秒检测版本变化，自动重载页面 ===== */
+(function(){
+  var HOT_VER = null; // 首次获取version.json时自动记录，之后比较
+  function checkUpdate(){
+    fetch('version.json?_=' + Date.now())
+      .then(function(r){ return r.json(); })
+      .then(function(v){
+        if(!HOT_VER){ HOT_VER = v.version; return; } // 首次只记录，不触发重载
+        if(v.version && v.version !== HOT_VER){
+          console.log('[hot-reload] version changed:', HOT_VER, '->', v.version, 'reloading...');
+          location.reload();
+        }
+      })
+      .catch(function(){ /* version.json不可达时静默忽略 */ });
+  }
+  setInterval(checkUpdate, 30000);
+  checkUpdate();
+})();
+</script>
+
+<script>(function(){
+var d=document,b=d.body;if(!b)return;
+var old=b.querySelectorAll('[data-aigc-mark],#__xas_aigc_watermark__');
+for(var k=0;k<old.length;k++)old[k].parentNode&&old[k].parentNode.removeChild(old[k]);
+var f=d.createElement("div");
+f.id="__xas_aigc_watermark__";
+f.setAttribute("data-aigc-mark","true");
+f.style.cssText="position:fixed;bottom:8px;right:12px;z-index:2147483647;font-size:11px;padding:3px 7px;font-family:system-ui,sans-serif;pointer-events:none;color:rgba(30,30,30,0.6);background:rgba(255,255,255,0.4);border:0.5px solid rgba(0,0,0,0.08);border-radius:4px;line-height:1.4;backdrop-filter:blur(8px);";
+var paths=["M14.0072 26.6377C14.2318 25.9475 13.3696 25.4389 12.8659 25.9611C9.56694 29.3941 6.9736 33.4696 5.35587 37.9788C-0.86998 55.1279 7.72006 74.1728 24.7867 80.6891C33.1499 83.8815 41.0252 82.7894 44.7212 81.8812C54.0056 79.6016 63.1537 72.4609 66.7114 63.4447C67.1039 62.4525 66.6252 61.3286 65.6404 60.9222C63.78 60.1548 61.9263 59.3896 60.3721 58.7471C59.46 58.3702 58.4117 58.7402 57.9398 59.6076C56.4287 62.3753 54.8496 65.0568 52.4945 67.2274C46.0349 73.5893 36.1675 75.8621 27.5956 72.9036C14.6833 68.6487 7.76998 54.5307 12.124 41.7683C12.3668 41.0553 12.4916 40.3038 12.4621 39.55C12.242 33.8125 12.8228 30.2955 14.0072 26.6377Z","M73.6785 14.313C74.3682 14.5378 74.8765 13.675 74.3546 13.171C70.9241 9.86968 66.8514 7.27451 62.3454 5.65564C45.2084 -0.574603 26.1769 8.0215 19.6651 25.1002C16.4751 33.4692 17.5664 41.3501 18.474 45.0488C20.7519 54.3396 27.8876 63.4943 36.8974 67.0544C37.8889 67.4472 39.012 66.9681 39.4182 65.9827C40.185 64.1209 40.9497 62.2659 41.5918 60.7107C41.9684 59.7979 41.5986 58.7489 40.7318 58.2767C37.9661 56.7645 35.2865 55.1843 33.1174 52.8275C26.76 46.3634 24.4888 36.489 27.4452 27.9111C31.6971 14.9897 45.8051 8.07145 58.5586 12.4285C59.271 12.6715 60.022 12.7964 60.7753 12.7668C66.5088 12.5466 70.0233 13.1278 73.6785 14.313Z","M85.9922 73.9549C85.7676 74.6451 86.6298 75.1537 87.1335 74.6315C90.4324 71.1985 93.0258 67.123 94.6435 62.6138C100.869 45.4647 92.2793 26.4198 75.2127 19.9035C66.8495 16.7111 58.9742 17.8033 55.2782 18.7114C45.9938 20.991 36.8456 28.1317 33.288 37.1479C32.8955 38.1401 33.3742 39.264 34.3589 39.6704C36.2194 40.4378 38.0731 41.203 39.6273 41.8455C40.5394 42.2224 41.5876 41.8524 42.0596 40.985C43.5706 38.2173 45.1498 35.5358 47.5049 33.3652C53.9645 27.0033 63.8319 24.7305 72.4038 27.689C85.3161 31.9439 92.2294 46.0619 87.8754 58.8243C87.6326 59.5373 87.5078 60.2888 87.5373 61.0426C87.7574 66.7801 87.1766 70.2971 85.9922 73.9549Z","M26.2674 86.2849C25.5777 86.0601 25.0694 86.9229 25.5913 87.4269C29.0219 90.7282 33.0945 93.3234 37.6028 94.9423C54.7398 101.173 73.7713 92.5764 80.2831 75.4977C83.4731 67.1287 82.3818 59.2478 81.4742 55.5491C79.1963 46.2583 72.0606 37.1036 63.0508 33.5435C62.0593 33.1507 60.9362 33.6298 60.53 34.6152C59.7632 36.477 58.9985 38.3297 58.3564 39.885C57.9798 40.7977 58.3496 41.8467 59.2163 42.3212C61.9821 43.8334 64.6617 45.4114 66.8285 47.7704C73.1859 54.2345 75.4571 64.1089 72.5007 72.6869C68.2488 85.6082 54.1408 92.5265 41.3874 88.1694C40.6749 87.9264 39.9239 87.8015 39.1706 87.8311C33.4371 88.0513 29.9226 87.4701 26.2674 86.2826V86.2849Z"];
+b.appendChild(f);
+var svg='<svg width="14" height="14" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline;vertical-align:-2px;margin:0 4px">';
+for(var i=0;i<paths.length;i++)svg+='<path d="'+paths[i]+'" fill="rgba(30,30,30,0.5)"/>';
+svg+="</svg>";
+f.innerHTML="本页面由"+svg+"超级小爱AI生成";
+})();</script>
+</body>
+</html>
